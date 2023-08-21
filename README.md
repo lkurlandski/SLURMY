@@ -6,7 +6,7 @@ Demonstration of using SLURM for large model training.
 ```
 conda create --name SLURMY python=3.11
 conda activate SLURMY
-pip install torch torchvision torchaudio torchtext transformers accelerate evaluate datasets tokenizerss
+pip install torch torchvision torchaudio torchtext transformers accelerate evaluate datasets tokenizers scikit-learn matplotlib
 ```
 
 ## Usage
