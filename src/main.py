@@ -1,113 +1,93 @@
 """
-Pretrain GPT-2 on Causal Language Modeling (CLM) task.
-
-Based on the guide from:
-    https://huggingface.co/docs/transformers/v4.31.0/en/tasks/language_modeling
-
-GPT2 Paper:
-    https://d4mucfpksywv.cloudfront.net/better-language-models/language-models.pdf
+Fine-tune BERT for text classification.
 """
 
 from dataclasses import dataclass, field
+from functools import partial
 import math
 import os
 import sys
+from typing import Optional
 import warnings
 
-from datasets import load_dataset
+from datasets import load_dataset, Dataset, DatasetDict
 from torch import nn
 from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
+    AutoModel,
     AutoTokenizer,
-    DataCollatorForLanguageModeling,
-    GPT2Config,
-    GPT2LMHeadModel,
+    DataCollatorWithPadding,
     HfArgumentParser,
-    Trainer,
-    TrainingArguments,
+    PretrainedModel,
+    PretrainedTokenizer,
 )
 
 
-DATASET_NAME_OR_PATH = "eli5"
-SUBSET = 16384
-SPLIT = f"train_asks[0:{SUBSET}]"
-BLOCK_SIZE = 128
-NUM_PROC = 4
 BR = "-" * 78
 
 
 @dataclass
 class Arguments:
-    test_size: float = field(
-        default=0.1, metadata={"help": "Are you stupid? This is obviously the test size."},
+    dataset_name_or_path: str = field(
+        default="ag_news",
+        metadata={"help": "Try ``, ``, or ``."}
     )
     pretrained_model_name_or_path: str = field(
-        default="gpt2", metadata={"help": "Try `gpt2`, `gpt_neo`, `gpt_neox` etc."},
+        default="bert-large-uncased",
+        metadata={"help": "Try ``, ``, or ``."}
     )
-    scale: float = field(
-        default=1.0, metadata={"help": "Up/down scale gpt2 model by this factor."},
-    )
+    do_train: bool = field(default=False)
+    do_eval: bool = field(default=False)
+    per_device_batch_size: int = field(default=8)
+    num_training_epochs: int = field(default=1)
 
 
 def count_parameters(model: nn.Module, requires_grad: bool = False) -> int:
+    """Counts the parameters in a torch.nn.Module object."""
     return sum(p.numel() for p in model.parameters() if (not requires_grad or p.requires_grad))
 
 
-parser = HfArgumentParser([Arguments, TrainingArguments])
-args, training_args = parser.parse_args_into_dataclasses()
+# Parse the command-line arguments.
+parser = HfArgumentParser([Arguments])
+args = parser.parse_args_into_dataclasses()[0]
 
-tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_name_or_path)
-tokenizer.pad_token = tokenizer.eos_token
-
-
-def tok_fn(examples):
-    return tokenizer([" ".join(x) for x in examples["answers.text"]])
-
-
-def grp_fn(examples):
-    concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-    total_length = len(concatenated_examples[list(examples.keys())[0]])
-    if total_length >= BLOCK_SIZE:
-        total_length = (total_length // BLOCK_SIZE) * BLOCK_SIZE
-    result = {
-        k: [t[i : i + BLOCK_SIZE] for i in range(0, total_length, BLOCK_SIZE)]
-        for k, t in concatenated_examples.items()
-    }
-    result["labels"] = result["input_ids"].copy()
-    return result
+# Fetch the pretrained fast tokenizer.
+tokenizer: PretrainedTokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_name_or_path)
+def tok_fn(examples, padding: bool, truncation: bool, max_length: Optional[int] = None):
+    """Tokenizes text into discrete vectors according to the learned vocabulary."""
+    return tokenizer(examples, padding=padding, truncation=truncation, max_length=max_length)
 
 
-dataset = load_dataset(DATASET_NAME_OR_PATH, split=SPLIT)
-dataset = dataset.train_test_split(test_size=args.test_size)
-dataset = dataset.flatten()
-dataset = dataset.map(tok_fn, batched=True, num_proc=NUM_PROC, remove_columns=dataset["train"].column_names)
-dataset = dataset.map(grp_fn, batched=True, num_proc=NUM_PROC)
+# Fetch and preprocess the dataset.
+dataset: DatasetDict | Dataset = load_dataset(args.dataset_name_or_path)
+if not isinstance(dataset, DatasetDict):
+    dataset = dataset.train_test_split()
+dataset = dataset.map(partial(tok_fn, padding=False, truncation=True), batched=True)
 
-if args.pretrained_model_name_or_path == "gpt2" and args.scale != 1:
-    config = GPT2Config(
-        vocab_size=len(tokenizer),
-        n_positions=int(1024 * args.scale),
-        n_embd=int(768 * args.scale),
-        n_layer=int(12 * args.scale),
-        n_head=int(12 * args.scale),
-        bos_token_id=tokenizer.bos_token_id,
-        eos_token_id=tokenizer.eos_token_id,
-    )
-    model = GPT2LMHeadModel(config)
-else:
-    if args.scale != 1:
-        warnings.warn(
-            f"Ignoring `{args.scale=}` as it is not implemented for models other than `gpt2`.",
-            flush=True,
-        )
-    config = AutoConfig.from_pretrained(args.pretrained_model_name_or_path)
-    model = AutoModelForCausalLM.from_config(config)
+model: PretrainedModel = AutoModel.from_pretrained(args.pretrained_model_name_or_path)
+data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-data_collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
+
+class Trainer:
+    """Encapsulates training a Transformer Causal Language Model."""
+    def __init__(
+        self,
+        model: PretrainedModel,
+        args: TrainingArguments,
+        train_dataset: Dataset,
+        eval_dataset: Dataset,
+        data_collator: DataCollatorForLanguageModeling,
+    ) -> None:
+        ...
+
+    def train() -> None:
+        ...
+
+    def eval(self, eval_dataset: Dataset = None) -> dict[str, float]:
+        eval_dataset = self.eval_dataset if eval_dataset is None else eval_dataset
+
+
 trainer = Trainer(
     model=model,
-    args=training_args,
     train_dataset=dataset["train"],
     eval_dataset=dataset["test"],
     data_collator=data_collator,
@@ -132,3 +112,5 @@ if training_args.do_train:
 if training_args.do_eval:
     eval_results = trainer.evaluate()
     print(f"Perplexity: {math.exp(eval_results['eval_loss']):.2f}")
+
+sys.exit(0)
