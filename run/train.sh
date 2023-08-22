@@ -16,14 +16,14 @@ conda activate SLURMY
 
 python \
 src/main.py \
---dataset_name="ag_news" \
---model_name="roberta-large" \
+--dataset_name="trec" \
+--model_name="prajjwal1/bert-tiny" \
 --do_train \
 --do_eval \
 --do_anal \
 --overwrite_output_dir \
---per_device_train_batch_size=2 \
---per_device_eval_batch_size=2 \
+--per_device_train_batch_size=512 \
+--per_device_eval_batch_size=512 \
 --num_train_epochs=10 \
 --num_workers=16 \
---device="cuda:0"
+--device="cuda"

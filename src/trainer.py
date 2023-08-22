@@ -24,7 +24,7 @@ class TrainerArguments:
     per_device_eval_batch_size: int = field(default=8)
     num_train_epochs: int = field(default=1)
     num_workers: int = field(default=0)
-    patience: int = field(default=5)
+    patience: Optional[int] = field(default=None)
     device: str = field(default="cpu")
 
     def __post_init__(self) -> None:
