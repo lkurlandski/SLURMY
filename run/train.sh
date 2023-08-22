@@ -14,7 +14,7 @@
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate SLURMY
 
-python \
+torchrun --nnodes=1 --nproc_per_node=1 \
 src/main.py \
 --dataset_name="trec" \
 --model_name="prajjwal1/bert-tiny" \
