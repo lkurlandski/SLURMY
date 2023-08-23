@@ -121,7 +121,10 @@ def main(args: Arguments, trainer_args: TrainerArguments) -> None:
         return
 
     # Set up the model for training.
-    data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
+    data_collator = DataCollatorWithPadding(
+        tokenizer=tokenizer,
+        pad_to_multiple_of=8,  # Helps utilize tensor cores for fp16
+    )
     model: PreTrainedModel = AutoModelForSequenceClassification.from_pretrained(
         args.model_name,
         num_labels=dataset["train"]["train"].features["label"].num_classes,

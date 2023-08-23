@@ -16,7 +16,7 @@ conda activate SLURMY
 
 torchrun --nnodes=1 --nproc_per_node=1 \
 src/main.py \
---dataset_name="trec" \
+--dataset_name="ag_news" \
 --model_name="prajjwal1/bert-tiny" \
 --do_train \
 --do_eval \

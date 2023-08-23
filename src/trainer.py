@@ -29,7 +29,10 @@ class TrainerArguments:
 
     def __post_init__(self) -> None:
         if self.per_device_train_batch_size % 64 != 0 or self.per_device_eval_batch_size % 64 != 0:
-            warnings.warn("A100s are most efficient for batch sizes that is are multiples of 64.")
+            warnings.warn(
+                "Tensor cores most efficient for batch sizes that are multiple of 64 (for A100s)"
+                " or otherwise 8 for fp16 training."
+            )
         if self.num_workers < 0:
             self.num_workers = int(len(os.sched_getaffinity(0)) / self.num_workers)
         assert self.num_train_epochs > 0

@@ -16,4 +16,4 @@ conda activate SLURMY
 python \
 src/main.py \
 --dataset_name="ag_news" \
---model_name="roberta-large"
+--model_name="prajjwal1/bert-tiny"
